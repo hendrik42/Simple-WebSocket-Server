@@ -126,13 +126,19 @@ namespace SimpleWeb {
             std::list<SendData> send_queue;
             
             void send_from_queue(const std::shared_ptr<Connection> &connection) {
+                TIMLINE0;
                 strand.post([this, connection]() {
+                    TIMLINE0;
                     boost::asio::async_write(*socket, send_queue.begin()->header_stream->streambuf,
                             strand.wrap([this, connection](const boost::system::error_code& ec, size_t /*bytes_transferred*/) {
+            
+                        TIMLINE0;
                         if(!ec) {
+                            TIMLINE0;
                             boost::asio::async_write(*socket, send_queue.begin()->message_stream->streambuf,
                                     strand.wrap([this, connection]
                                     (const boost::system::error_code& ec, size_t /*bytes_transferred*/) {
+                                TIMLINE0;
                                 auto send_queued=send_queue.begin();
                                 if(send_queued->callback)
                                     send_queued->callback(ec);
@@ -143,9 +149,11 @@ namespace SimpleWeb {
                                 }
                                 else
                                     send_queue.clear();
+                                TIMLINE0;
                             }));
                         }
                         else {
+                            TIMLINE0;
                             auto send_queued=send_queue.begin();
                             if(send_queued->callback)
                                 send_queued->callback(ec);
@@ -153,6 +161,8 @@ namespace SimpleWeb {
                         }
                     }));
                 });
+
+                TIMLINE0;
             }
             
             std::atomic<bool> closed;
@@ -391,9 +401,16 @@ namespace SimpleWeb {
         void send(const std::shared_ptr<Connection> &connection, const std::shared_ptr<SendStream> &message_stream, 
                 const std::function<void(const boost::system::error_code&)>& callback=nullptr, 
                 unsigned char fin_rsv_opcode=129) const {
-            if(fin_rsv_opcode!=136)
+
+            TIMLINE0;
+
+            if(fin_rsv_opcode!=136){
+                TIMLINE0;
                 timer_idle_reset(connection);
+            }
             
+            TIMLINE0;
+
             auto header_stream=std::make_shared<SendStream>();
 
             size_t length=message_stream->size();
@@ -418,11 +435,15 @@ namespace SimpleWeb {
             else
                 header_stream->put(static_cast<unsigned char>(length));
 
+            TIMLINE0;
+    
             connection->strand.post([this, connection, header_stream, message_stream, callback]() {
+                TIMLINE0;
                 connection->send_queue.emplace_back(header_stream, message_stream, callback);
                 if(connection->send_queue.size()==1)
                     connection->send_from_queue(connection);
             });
+            TIMLINE0;
         }
 
         void send_close(const std::shared_ptr<Connection> &connection, int status, const std::string& reason="",
