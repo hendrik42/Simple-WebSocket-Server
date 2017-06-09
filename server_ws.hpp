@@ -7,6 +7,8 @@
 #include <boost/asio/spawn.hpp>
 #include <boost/algorithm/string/predicate.hpp>
 #include <boost/functional/hash.hpp>
+#include <boost/bind.hpp>
+#include <boost/thread.hpp>
 
 #include <unordered_map>
 #include <thread>
@@ -306,6 +308,62 @@ namespace SimpleWeb {
                 }
                 pair.second.connections.clear();
             }
+        }
+
+        void send_sync(const std::shared_ptr<Connection> &connection, const std::shared_ptr<SendStream> &message_stream, 
+                const std::function<void(const boost::system::error_code&)>& callback=nullptr, 
+                unsigned char fin_rsv_opcode=129) const {
+            
+            typedef boost::promise<void> promise_type;
+            promise_type promise;
+
+            auto callback2=[&callback, &promise_type, &promise](const boost::system::error_code& ec){
+                promise_type::set_value(promise);
+                if(callback){
+                    callback(ec);
+                }
+            };
+            send(connection, message_stream, callback2, fin_rsv_opcode);
+            // send(value, boost::bind(&promise_type::set_value, &promise));
+            //FACTOR(send)
+            #if 0
+            // async_send(value, boost::bind(&promise_type::set_value, &promise));
+            if(fin_rsv_opcode!=136)
+                timer_idle_reset(connection);
+            
+            auto header_stream=std::make_shared<SendStream>();
+
+            size_t length=message_stream->size();
+
+            header_stream->put(fin_rsv_opcode);
+            //unmasked (first length byte<128)
+            if(length>=126) {
+                int num_bytes;
+                if(length>0xffff) {
+                    num_bytes=8;
+                    header_stream->put(127);
+                }
+                else {
+                    num_bytes=2;
+                    header_stream->put(126);
+                }
+                
+                for(int c=num_bytes-1;c>=0;c--) {
+                    header_stream->put((static_cast<unsigned long long>(length) >> (8 * c)) % 256);
+                }
+            }
+            else
+                header_stream->put(static_cast<unsigned char>(length));
+
+            connection->strand.post([this, connection, header_stream, message_stream, callback]() {
+                connection->send_queue.emplace_back(header_stream, message_stream, callback);
+                if(connection->send_queue.size()==1)
+                    connection->send_from_queue(connection);
+            });
+            #endif
+
+            // TODO: instead, return promise.get_future()?
+            promise.get_future().wait();
         }
         
         ///fin_rsv_opcode: 129=one fragment, text, 130=one fragment, binary, 136=close connection.
