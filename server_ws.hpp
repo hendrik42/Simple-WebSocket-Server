@@ -19,6 +19,8 @@
 #include <atomic>
 #include <iostream>
 
+#define TIMLINE0 std::cout<<__FILE__ << ":" << __LINE__<<std::endl
+
 #ifndef CASE_INSENSITIVE_EQUALS_AND_HASH
 #define CASE_INSENSITIVE_EQUALS_AND_HASH
 //Based on http://www.boost.org/doc/libs/1_60_0/doc/html/unordered/hash_equality.html
@@ -313,18 +315,27 @@ namespace SimpleWeb {
         void send_sync(const std::shared_ptr<Connection> &connection, const std::shared_ptr<SendStream> &message_stream, 
                 const std::function<void(const boost::system::error_code&)>& callback=nullptr, 
                 unsigned char fin_rsv_opcode=129) const {
-            
+
+            TIMLINE0;
+
             typedef boost::promise<void> promise_type;
             promise_type promise;
 
             auto callback2=[&callback, &promise](const boost::system::error_code& ec){
+                TIMLINE0;
                 // promise_type::set_value(promise);
                 promise.set_value();
+                TIMLINE0;
                 if(callback){
+                    TIMLINE0;
                     callback(ec);
                 }
             };
+
+            TIMLINE0;
+
             send(connection, message_stream, callback2, fin_rsv_opcode);
+            TIMLINE0;
             // send(value, boost::bind(&promise_type::set_value, &promise));
             //FACTOR(send)
             #if 0
@@ -364,7 +375,15 @@ namespace SimpleWeb {
             #endif
 
             // TODO: instead, return promise.get_future()?
-            promise.get_future().wait();
+            TIMLINE0;
+
+            auto temp=promise.get_future();
+
+            TIMLINE0;
+
+            temp.wait();
+            TIMLINE0;
+            // promise.get_future().wait();
         }
         
         ///fin_rsv_opcode: 129=one fragment, text, 130=one fragment, binary, 136=close connection.
