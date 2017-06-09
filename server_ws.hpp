@@ -318,7 +318,8 @@ namespace SimpleWeb {
             promise_type promise;
 
             auto callback2=[&callback, &promise](const boost::system::error_code& ec){
-                promise_type::set_value(promise);
+                // promise_type::set_value(promise);
+                promise.set_value();
                 if(callback){
                     callback(ec);
                 }
